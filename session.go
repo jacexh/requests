@@ -1,25 +1,29 @@
 package requests
 
 import (
+	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
+	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/valyala/fasthttp"
 )
 
 type (
-	RequestOption struct {
-		Timeout        time.Duration
-		AllowRedirects bool
+	Option struct {
+		Timeout            time.Duration
+		AllowRedirects     bool
+		InsecureSkipVerify bool
 	}
 
-	RequestParameters struct {
+	Parameters struct {
 		Query  map[string]string
 		Data   map[string]string
 		Json   interface{}
@@ -29,113 +33,143 @@ type (
 	}
 
 	Session struct {
-		client *fasthttp.Client
-		op     *RequestParameters
-		cookie *fasthttp.Cookie
+		client *http.Client
+		op     Option
 	}
+
+	Interceptor func(*http.Request, *http.Response, []byte) error
 )
 
-func mergeOption(src, target RequestOption) RequestOption {
-	if target.Timeout == 0 {
-		target.Timeout = src.Timeout
+func NewSession(op Option) *Session {
+	return &Session{
+		client: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: op.InsecureSkipVerify,
+				},
+			},
+			Jar:     new(cookiejar.Jar),
+			Timeout: op.Timeout,
+		},
+		op: op,
 	}
-	if target.AllowRedirects == false {
-		target.AllowRedirects = src.AllowRedirects
-	}
-	return target
 }
 
-func NewSession() *Session {
-	return &Session{client: &fasthttp.Client{}}
-}
-
-func (s *Session) Request(method string, path string, params RequestParameters, op RequestOption, res *fasthttp.Response, interceptor interface{}) error {
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	var err error
-	req.Header.SetMethod(strings.ToUpper(method))
-	req.URI().Update(path)
-
-	if params.Query != nil {
-		val := url.Values{}
-		for k, v := range params.Query {
-			val.Set(k, v)
+func UnmarshalJSONResponse(v interface{}) Interceptor {
+	return func(request *http.Request, response *http.Response, bytes []byte) error {
+		if strings.HasPrefix(response.Header.Get("Content-Type"), "application/json") {
+			return json.Unmarshal(bytes, v)
 		}
-		req.URI().SetQueryString(val.Encode())
+		return errors.New("invalid content type")
 	}
+}
+
+func (s *Session) Request(method string, path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
+	var err error
+	var contentType string
+	buff := GetBuffer()
+	defer PutBuffer(buff)
 
 	switch {
 	case params.Body != nil:
-		req.SetBody(params.Body)
+		_, err = buff.Write(params.Body)
 
 	case params.Json != nil:
 		data, err := json.Marshal(params.Json)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		req.Header.SetContentType("application/json; charset=UTF-8")
-		req.SetBody(data)
+		contentType = "application/json"
+		if _, err = buff.Write(data); err != nil {
+			return nil, err
+		}
 
 	case params.Files != nil:
-		writer := multipart.NewWriter(req.BodyWriter())
+		writer := multipart.NewWriter(buff)
 		for k, v := range params.Data {
 			if err := writer.WriteField(k, v); err != nil {
-				return err
+				return nil, err
 			}
 		}
 
 		for field, fp := range params.Files {
 			file, err := os.Open(fp)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			part, err := writer.CreateFormFile(field, filepath.Base(file.Name()))
 			if err != nil {
-				return err
+				return nil, err
 			}
 			_, err = io.Copy(part, file)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 		if err := writer.Close(); err != nil {
-			return err
+			return nil, err
 		}
-		req.Header.SetContentType(writer.FormDataContentType())
+		contentType = writer.FormDataContentType()
 
 	case params.Data != nil:
 		values := url.Values{}
 		for k, v := range params.Data {
 			values.Set(k, v)
 		}
-		req.SetBodyString(values.Encode())
-		req.Header.SetContentType("application/x-www-form-urlencoded; charset=UTF-8")
+		buff.WriteString(values.Encode())
+		contentType = "application/x-www-form-urlencoded"
 	}
 
-	err = s.client.Do(req, res)
+	req, err := http.NewRequest(strings.ToUpper(method), path, buff)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	req.Header.Set("User-Agent", "jacexh/requests")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	if params.Query != nil {
+		query := req.URL.Query()
+		for k, v := range params.Query {
+			query.Set(k, v)
+		}
+		req.URL.RawQuery = query.Encode()
+	}
+
+	res, err := s.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	_ = res.Body.Close()
+
+	if interceptor != nil {
+		err = interceptor(req, res, data)
+	}
+	return res, err
 }
 
-func (s *Session) Get(path string, params RequestParameters, op RequestOption, res *fasthttp.Response, interceptor interface{}) error {
-	return s.Request(fasthttp.MethodGet, path, params, op, res, interceptor)
+func (s *Session) Get(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
+	return s.Request(http.MethodGet, path, params, op, interceptor)
 }
 
-func (s *Session) Post(path string, params RequestParameters, op RequestOption, res *fasthttp.Response, interceptor interface{}) error {
-	return s.Request(fasthttp.MethodPost, path, params, op, res, interceptor)
+func (s *Session) Post(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
+	return s.Request(http.MethodPost, path, params, op, interceptor)
 }
 
-func (s *Session) Put(path string, params RequestParameters, op RequestOption, res *fasthttp.Response, interceptor interface{}) error {
-	return s.Request(fasthttp.MethodPut, path, params, op, res, interceptor)
+func (s *Session) Put(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
+	return s.Request(http.MethodPut, path, params, op, interceptor)
 }
 
-func (s *Session) Patch(path string, params RequestParameters, op RequestOption, res *fasthttp.Response, interceptor interface{}) error {
-	return s.Request(fasthttp.MethodPatch, path, params, op, res, interceptor)
+func (s *Session) Patch(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
+	return s.Request(http.MethodPatch, path, params, op, interceptor)
 }
 
-func (s *Session) Delete(path string, params RequestParameters, op RequestOption, res *fasthttp.Response, interceptor interface{}) error {
-	return s.Request(fasthttp.MethodDelete, path, params, op, res, interceptor)
+func (s *Session) Delete(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
+	return s.Request(http.MethodDelete, path, params, op, interceptor)
 }
