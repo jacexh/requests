@@ -127,7 +127,7 @@ body:
 	return contentType, err
 }
 
-func (s *Session) Request(method string, path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Request(method, path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
 	var err error
 	var contentType string
 

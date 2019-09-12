@@ -2,6 +2,10 @@ package requests
 
 import "net/http"
 
+func Request(method, path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return NewSession(Option{}).Request(method, path, params, interceptor)
+}
+
 func Get(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
 	return NewSession(Option{}).Get(path, params, interceptor)
 }
