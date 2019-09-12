@@ -15,8 +15,13 @@ import (
 	"time"
 )
 
+const (
+	defaultUA = "jacexh/requests - a go client for human"
+)
+
 type (
 	Option struct {
+		Name               string
 		Timeout            time.Duration
 		InsecureSkipVerify bool
 		Headers            map[string]string
@@ -139,13 +144,18 @@ func (s *Session) Request(method string, path string, params Parameters, interce
 		return nil, nil, err
 	}
 
-	// 设置headers
+	// begin to set headers
 	if s.op.Headers != nil {
 		for k, v := range s.op.Headers {
 			req.Header.Set(k, v)
 		}
 	}
-	req.Header.Set("User-Agent", "jacexh/requests")
+	if s.op.Name == "" {
+		req.Header.Set("User-Agent", defaultUA)
+	} else {
+		req.Header.Set("User-Agent", s.op.Name)
+	}
+
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
