@@ -3,7 +3,6 @@ package requests
 import (
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -19,8 +18,8 @@ import (
 type (
 	Option struct {
 		Timeout            time.Duration
-		AllowRedirects     bool
 		InsecureSkipVerify bool
+		Headers            map[string]string
 	}
 
 	Parameters struct {
@@ -41,6 +40,7 @@ type (
 )
 
 func NewSession(op Option) *Session {
+	jar, _ := cookiejar.New(nil)
 	return &Session{
 		client: &http.Client{
 			Transport: &http.Transport{
@@ -48,7 +48,7 @@ func NewSession(op Option) *Session {
 					InsecureSkipVerify: op.InsecureSkipVerify,
 				},
 			},
-			Jar:     new(cookiejar.Jar),
+			Jar:     jar,
 			Timeout: op.Timeout,
 		},
 		op: op,
@@ -57,57 +57,56 @@ func NewSession(op Option) *Session {
 
 func UnmarshalJSONResponse(v interface{}) Interceptor {
 	return func(request *http.Request, response *http.Response, bytes []byte) error {
-		if strings.HasPrefix(response.Header.Get("Content-Type"), "application/json") {
-			return json.Unmarshal(bytes, v)
-		}
-		return errors.New("invalid content type")
+		return json.Unmarshal(bytes, v)
 	}
 }
 
-func (s *Session) Request(method string, path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
+func (s *Session) writeBody(params Parameters, w io.Writer) (string, error) {
 	var err error
 	var contentType string
-	buff := GetBuffer()
-	defer PutBuffer(buff)
 
+body:
 	switch {
 	case params.Body != nil:
-		_, err = buff.Write(params.Body)
+		_, err = w.Write(params.Body)
+		if err != nil {
+			break body
+		}
 
 	case params.Json != nil:
 		data, err := json.Marshal(params.Json)
 		if err != nil {
-			return nil, err
+			break body
 		}
 		contentType = "application/json"
-		if _, err = buff.Write(data); err != nil {
-			return nil, err
+		if _, err = w.Write(data); err != nil {
+			break body
 		}
 
 	case params.Files != nil:
-		writer := multipart.NewWriter(buff)
+		writer := multipart.NewWriter(w)
 		for k, v := range params.Data {
 			if err := writer.WriteField(k, v); err != nil {
-				return nil, err
+				break body
 			}
 		}
 
 		for field, fp := range params.Files {
 			file, err := os.Open(fp)
 			if err != nil {
-				return nil, err
+				break body
 			}
 			part, err := writer.CreateFormFile(field, filepath.Base(file.Name()))
 			if err != nil {
-				return nil, err
+				break body
 			}
 			_, err = io.Copy(part, file)
 			if err != nil {
-				return nil, err
+				break body
 			}
 		}
 		if err := writer.Close(); err != nil {
-			return nil, err
+			break body
 		}
 		contentType = writer.FormDataContentType()
 
@@ -116,17 +115,44 @@ func (s *Session) Request(method string, path string, params Parameters, op Opti
 		for k, v := range params.Data {
 			values.Set(k, v)
 		}
-		buff.WriteString(values.Encode())
+		_, err = w.Write([]byte(values.Encode()))
 		contentType = "application/x-www-form-urlencoded"
+	}
+
+	return contentType, err
+}
+
+func (s *Session) Request(method string, path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	var err error
+	var contentType string
+
+	buff := GetBuffer()
+	defer PutBuffer(buff)
+
+	contentType, err = s.writeBody(params, buff)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	req, err := http.NewRequest(strings.ToUpper(method), path, buff)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// 设置headers
+	if s.op.Headers != nil {
+		for k, v := range s.op.Headers {
+			req.Header.Set(k, v)
+		}
 	}
 	req.Header.Set("User-Agent", "jacexh/requests")
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
+	}
+	if params.Header != nil {
+		for k, v := range params.Header {
+			req.Header.Set(k, v)
+		}
 	}
 
 	if params.Query != nil {
@@ -139,37 +165,53 @@ func (s *Session) Request(method string, path string, params Parameters, op Opti
 
 	res, err := s.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return res, nil, err
 	}
 	_ = res.Body.Close()
 
 	if interceptor != nil {
 		err = interceptor(req, res, data)
 	}
-	return res, err
+	return res, data, err
 }
 
-func (s *Session) Get(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
-	return s.Request(http.MethodGet, path, params, op, interceptor)
+func (s *Session) Get(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodGet, path, params, interceptor)
 }
 
-func (s *Session) Post(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
-	return s.Request(http.MethodPost, path, params, op, interceptor)
+func (s *Session) Post(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodPost, path, params, interceptor)
 }
 
-func (s *Session) Put(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
-	return s.Request(http.MethodPut, path, params, op, interceptor)
+func (s *Session) Put(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodPut, path, params, interceptor)
 }
 
-func (s *Session) Patch(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
-	return s.Request(http.MethodPatch, path, params, op, interceptor)
+func (s *Session) Patch(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodPatch, path, params, interceptor)
 }
 
-func (s *Session) Delete(path string, params Parameters, op Option, interceptor Interceptor) (*http.Response, error) {
-	return s.Request(http.MethodDelete, path, params, op, interceptor)
+func (s *Session) Delete(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodDelete, path, params, interceptor)
+}
+
+func (s *Session) Head(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodHead, path, params, interceptor)
+}
+
+func (s *Session) Connect(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodConnect, path, params, interceptor)
+}
+
+func (s *Session) Options(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodOptions, path, params, interceptor)
+}
+
+func (s *Session) Trace(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.Request(http.MethodTrace, path, params, interceptor)
 }
