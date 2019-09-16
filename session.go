@@ -195,7 +195,7 @@ func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Respon
 	if err != nil {
 		return nil, nil, err
 	}
-	data, err = ioutil.ReadAll(req.Body)
+	data, err = ioutil.ReadAll(res.Body)
 	if err != nil {
 		return res, nil, err
 	}
@@ -214,7 +214,6 @@ func (s *Session) Request(method, path string, params Parameters, interceptor In
 	if err != nil {
 		return nil, nil, err
 	}
-
 	res, data, err := s.Send(req, interceptor)
 	return res, data, err
 }
