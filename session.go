@@ -20,23 +20,25 @@ const (
 )
 
 type (
+	// Any 可用于query/headers/data/files传参
+	Any map[string]string
+
+	// Option Session的全局配置
 	Option struct {
 		Name               string
 		Timeout            time.Duration
 		InsecureSkipVerify bool
-		Headers            map[string]string
+		Headers            Any
 	}
 
 	Params struct {
-		Query  Any
-		Data   Any
-		Json   interface{}
-		Files  Any
-		Body   []byte
-		Header Any
+		Query   Any
+		Data    Any
+		Json    interface{}
+		Files   Any
+		Body    []byte
+		Headers Any
 	}
-
-	Any map[string]string
 
 	Session struct {
 		client *http.Client
@@ -174,8 +176,8 @@ func (s *Session) Prepare(method, path string, params Params, body io.ReadWriter
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	if params.Header != nil {
-		for k, v := range params.Header {
+	if params.Headers != nil {
+		for k, v := range params.Headers {
 			req.Header.Set(k, v)
 		}
 	}

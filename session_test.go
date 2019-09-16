@@ -36,8 +36,8 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 
 	obj := make(map[string]interface{})
 	_, data, err := session.Post("http://requestbin.net/api/v1/bins", Params{
-		Data:   Any{"private": "false"},
-		Header: Any{"Origin": "http://requestbin.net"},
+		Data:    Any{"private": "false"},
+		Headers: Any{"Origin": "http://requestbin.net"},
 	},
 		UnmarshalJSONResponse(&obj))
 	if err != nil {
