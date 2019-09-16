@@ -27,14 +27,16 @@ type (
 		Headers            map[string]string
 	}
 
-	Parameters struct {
-		Query  map[string]string
-		Data   map[string]string
+	Params struct {
+		Query  Any
+		Data   Any
 		Json   interface{}
-		Files  map[string]string
+		Files  Any
 		Body   []byte
-		Header map[string]string
+		Header Any
 	}
+
+	Any map[string]string
 
 	Session struct {
 		client *http.Client
@@ -82,7 +84,7 @@ func (s *Session) WithOption(op Option) *Session {
 	return s
 }
 
-func (s *Session) writeBody(params Parameters, w io.Writer) (string, error) {
+func (s *Session) writeBody(params Params, w io.Writer) (string, error) {
 	var err error
 	var contentType string
 
@@ -143,7 +145,7 @@ body:
 	return contentType, err
 }
 
-func (s *Session) Prepare(method, path string, params Parameters, body io.ReadWriter) (*http.Request, error) {
+func (s *Session) Prepare(method, path string, params Params, body io.ReadWriter) (*http.Request, error) {
 	var err error
 	var contentType string
 
@@ -206,7 +208,7 @@ func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Respon
 	return res, data, err
 }
 
-func (s *Session) Request(method, path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Request(method, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	buff := GetBuffer()
 	defer PutBuffer(buff)
 
@@ -218,38 +220,38 @@ func (s *Session) Request(method, path string, params Parameters, interceptor In
 	return res, data, err
 }
 
-func (s *Session) Get(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Get(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodGet, path, params, interceptor)
 }
 
-func (s *Session) Post(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Post(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodPost, path, params, interceptor)
 }
 
-func (s *Session) Put(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Put(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodPut, path, params, interceptor)
 }
 
-func (s *Session) Patch(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Patch(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodPatch, path, params, interceptor)
 }
 
-func (s *Session) Delete(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Delete(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodDelete, path, params, interceptor)
 }
 
-func (s *Session) Head(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Head(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodHead, path, params, interceptor)
 }
 
-func (s *Session) Connect(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Connect(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodConnect, path, params, interceptor)
 }
 
-func (s *Session) Options(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Options(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodOptions, path, params, interceptor)
 }
 
-func (s *Session) Trace(path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Trace(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodTrace, path, params, interceptor)
 }

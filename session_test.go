@@ -12,7 +12,7 @@ func TestInterceptor(t *testing.T) {
 	ret := make(map[string]interface{})
 	_, _, err := session.Request(
 		"get", "https://httpbin.org/json",
-		Parameters{},
+		Params{},
 		UnmarshalJSONResponse(&ret),
 	)
 
@@ -29,13 +29,13 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 		Name:    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36",
 		Timeout: 90 * time.Second,
 	})
-	_, _, err := session.Get("http://requestbin.net", Parameters{}, nil)
+	_, _, err := session.Get("http://requestbin.net", Params{}, nil)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
 	obj := make(map[string]interface{})
-	_, data, err := session.Post("http://requestbin.net/api/v1/bins", Parameters{
+	_, data, err := session.Post("http://requestbin.net/api/v1/bins", Params{
 		Data:   map[string]string{"private": "false"},
 		Header: map[string]string{"Origin": "http://requestbin.net"},
 	},
@@ -47,7 +47,7 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 		t.Fatal(string(data))
 	}
 	bin := obj["name"].(string)
-	res, _, err := session.Get("http://requestbin.net/r/"+bin, Parameters{Data: map[string]string{"hello": "world"}}, nil)
+	res, _, err := session.Get("http://requestbin.net/r/"+bin, Params{Data: map[string]string{"hello": "world"}}, nil)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
