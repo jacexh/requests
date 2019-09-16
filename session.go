@@ -66,6 +66,22 @@ func UnmarshalJSONResponse(v interface{}) Interceptor {
 	}
 }
 
+func (s *Session) WithClient(client *http.Client) *Session {
+	s.client = client
+	s.client.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = s.op.InsecureSkipVerify
+	s.client.Timeout = s.op.Timeout
+	return s
+}
+
+func (s *Session) WithOption(op Option) *Session {
+	s.op = op
+	if s.client != nil {
+		s.client.Timeout = s.op.Timeout
+		s.client.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = s.op.InsecureSkipVerify
+	}
+	return s
+}
+
 func (s *Session) writeBody(params Parameters, w io.Writer) (string, error) {
 	var err error
 	var contentType string
@@ -127,21 +143,18 @@ body:
 	return contentType, err
 }
 
-func (s *Session) Request(method, path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Prepare(method, path string, params Parameters, body io.ReadWriter) (*http.Request, error) {
 	var err error
 	var contentType string
 
-	buff := GetBuffer()
-	defer PutBuffer(buff)
-
-	contentType, err = s.writeBody(params, buff)
+	contentType, err = s.writeBody(params, body)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	req, err := http.NewRequest(strings.ToUpper(method), path, buff)
+	req, err := http.NewRequest(strings.ToUpper(method), path, body)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// begin to set headers
@@ -172,21 +185,37 @@ func (s *Session) Request(method, path string, params Parameters, interceptor In
 		}
 		req.URL.RawQuery = query.Encode()
 	}
+	return req, err
+}
 
+func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Response, []byte, error) {
+	var err error
+	var data []byte
 	res, err := s.client.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	data, err := ioutil.ReadAll(res.Body)
+	data, err = ioutil.ReadAll(req.Body)
 	if err != nil {
 		return res, nil, err
 	}
 	_ = res.Body.Close()
-
 	if interceptor != nil {
 		err = interceptor(req, res, data)
 	}
+	return res, data, err
+}
+
+func (s *Session) Request(method, path string, params Parameters, interceptor Interceptor) (*http.Response, []byte, error) {
+	buff := GetBuffer()
+	defer PutBuffer(buff)
+
+	req, err := s.Prepare(method, path, params, buff)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	res, data, err := s.Send(req, interceptor)
 	return res, data, err
 }
 

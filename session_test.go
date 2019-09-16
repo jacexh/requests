@@ -56,3 +56,16 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 	}
 	log.Printf("open %s for more details", "http://requestbin.net/r/"+bin+"?inspect")
 }
+
+func TestRequest(t *testing.T) {
+	session := NewSession(Option{})
+	_, _, err := session.Post("http://requestbin.net/r/1dwh0311", Parameters{Data: map[string]string{"version": "2.0"}}, nil)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	_, _, err = session.Post("http://requestbin.net/r/1dwh0311", Parameters{Json: map[string]string{"version": "20"}}, nil)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+}
