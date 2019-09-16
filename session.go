@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -53,9 +54,22 @@ func NewSession(op Option) *Session {
 	return &Session{
 		client: &http.Client{
 			Transport: &http.Transport{
+				Proxy: nil,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).DialContext,
+				ForceAttemptHTTP2:   true,
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 50,
+				MaxConnsPerHost:     1000,
+				IdleConnTimeout:     60 * time.Second,
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: op.InsecureSkipVerify,
 				},
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
 			},
 			Jar:     jar,
 			Timeout: op.Timeout,
