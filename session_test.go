@@ -55,4 +55,24 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 		t.FailNow()
 	}
 	log.Printf("open %s for more details", "http://requestbin.net/r/"+bin+"?inspect")
+
+	_, _, err = session.Post("http://requestbin.net/r/"+bin, Params{
+		Query: Any{"format": "json"},
+		Json:  map[string]interface{}{"hello": "foobar", "version": 1}}, nil)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	_, _, err = session.Post("http://requestbin.net/r/"+bin, Params{
+		Query: Any{"format": "multipart"},
+		Data:  Any{"version": "3"},
+		Files: Any{"file": "README.md"}}, nil)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	_, _, err = session.Post("http://requestbin.net/r/"+bin, Params{Body: []byte(`i am body`)}, nil)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 }
