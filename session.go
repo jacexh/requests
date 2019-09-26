@@ -1,6 +1,7 @@
 package requests
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"io"
@@ -161,16 +162,21 @@ body:
 	return contentType, err
 }
 
-func (s *Session) Prepare(method, path string, params Params, body io.ReadWriter) (*http.Request, error) {
+func (s *Session) Prepare(ctx context.Context, method, path string, params Params, body io.ReadWriter, withContext bool) (*http.Request, error) {
 	var err error
 	var contentType string
+	var req *http.Request
 
 	contentType, err = s.writeBody(params, body)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(strings.ToUpper(method), path, body)
+	if withContext {
+		req, err = http.NewRequestWithContext(ctx, strings.ToUpper(method), path, body)
+	} else {
+		req, err = http.NewRequest(strings.ToUpper(method), path, body)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +234,19 @@ func (s *Session) Request(method, path string, params Params, interceptor Interc
 	buff := GetBuffer()
 	defer PutBuffer(buff)
 
-	req, err := s.Prepare(method, path, params, buff)
+	req, err := s.Prepare(nil, method, path, params, buff, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	res, data, err := s.Send(req, interceptor)
+	return res, data, err
+}
+
+func (s *Session) RequestWithContext(ctx context.Context, method, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	buff := GetBuffer()
+	defer PutBuffer(buff)
+
+	req, err := s.Prepare(ctx, method, path, params, buff, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -240,34 +258,70 @@ func (s *Session) Get(path string, params Params, interceptor Interceptor) (*htt
 	return s.Request(http.MethodGet, path, params, interceptor)
 }
 
+func (s *Session) GetWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodGet, path, params, interceptor)
+}
+
 func (s *Session) Post(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodPost, path, params, interceptor)
+}
+
+func (s *Session) PostWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodPost, path, params, interceptor)
 }
 
 func (s *Session) Put(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodPut, path, params, interceptor)
 }
 
+func (s *Session) PutWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodPut, path, params, interceptor)
+}
+
 func (s *Session) Patch(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodPatch, path, params, interceptor)
+}
+
+func (s *Session) PatchWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodPatch, path, params, interceptor)
 }
 
 func (s *Session) Delete(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodDelete, path, params, interceptor)
 }
 
+func (s *Session) DeleteWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodDelete, path, params, interceptor)
+}
+
 func (s *Session) Head(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodHead, path, params, interceptor)
+}
+
+func (s *Session) HeadWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodHead, path, params, interceptor)
 }
 
 func (s *Session) Connect(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodConnect, path, params, interceptor)
 }
 
+func (s *Session) ConnectWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodConnect, path, params, interceptor)
+}
+
 func (s *Session) Options(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodOptions, path, params, interceptor)
 }
 
+func (s *Session) OptionWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodOptions, path, params, interceptor)
+}
+
 func (s *Session) Trace(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
 	return s.Request(http.MethodTrace, path, params, interceptor)
+}
+
+func (s *Session) TraceWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodTrace, path, params, interceptor)
 }

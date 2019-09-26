@@ -1,6 +1,7 @@
 package requests
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"testing"
@@ -41,7 +42,11 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 	},
 		UnmarshalJSONResponse(&obj))
 	if err != nil {
-		t.Fatalf(err.Error())
+		if data != nil {
+			t.Fatalf("%s\n%s", err.Error(), data)
+		} else {
+			t.Fatal(err.Error())
+		}
 	}
 	if _, ok := obj["name"]; !ok {
 		t.Fatal(string(data))
@@ -74,5 +79,17 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 	_, _, err = session.Post("http://requestbin.net/r/"+bin, Params{Body: []byte(`i am body`)}, nil)
 	if err != nil {
 		t.Fatal(err.Error())
+	}
+}
+
+func TestRequestWithContext(t *testing.T) {
+	session := NewSession(Option{
+		Name:    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36",
+		Timeout: 30 * time.Second,
+	})
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	_, _, err := session.PostWithContext(ctx, "http://requestbin.net/ip", Params{Data: Any{"fizz": "buzz"}}, nil)
+	if err == nil {
+		t.Fatal("deadline did not exceeded")
 	}
 }
