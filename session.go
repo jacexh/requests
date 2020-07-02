@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -213,17 +212,24 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 }
 
 func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Response, []byte, error) {
+	buf := GetBuffer()
+	defer PutBuffer(buf)
+
 	var err error
 	var data []byte
+
 	res, err := s.client.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
-	data, err = ioutil.ReadAll(res.Body)
+
+	_, err = io.Copy(buf, res.Body)
 	if err != nil {
 		return res, nil, err
 	}
 	_ = res.Body.Close()
+	data = buf.Bytes()
+
 	if interceptor != nil {
 		err = interceptor(req, res, data)
 	}

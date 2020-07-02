@@ -23,6 +23,10 @@ func TestInterceptor(t *testing.T) {
 	if len(ret) == 0 {
 		t.FailNow()
 	}
+
+	if _, ok := ret["slideshow"]; !ok {
+		t.FailNow()
+	}
 }
 
 func TestCreateBinOnRequestBin(t *testing.T) {
