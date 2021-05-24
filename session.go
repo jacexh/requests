@@ -240,7 +240,7 @@ func (s *Session) Request(method, path string, params Params, interceptor Interc
 	buff := GetBuffer()
 	defer PutBuffer(buff)
 
-	req, err := s.Prepare(nil, method, path, params, buff, false)
+	req, err := s.Prepare(context.TODO(), method, path, params, buff, false)
 	if err != nil {
 		return nil, nil, err
 	}

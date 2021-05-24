@@ -34,15 +34,15 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 		Name:    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36",
 		Timeout: 90 * time.Second,
 	})
-	_, _, err := session.Get("http://requestbin.net", Params{}, nil)
+	_, _, err := session.Get("https://requestbin.net", Params{}, nil)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 
 	obj := make(map[string]interface{})
-	_, data, err := session.Post("http://requestbin.net/api/v1/bins", Params{
+	_, data, err := session.Post("https://requestbin.net/api/v1/bins", Params{
 		Data:    Any{"private": "false"},
-		Headers: Any{"Origin": "http://requestbin.net"},
+		Headers: Any{"Origin": "https://requestbin.net"},
 	},
 		UnmarshalJSONResponse(&obj))
 	if err != nil {
@@ -56,23 +56,23 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 		t.Fatal(string(data))
 	}
 	bin := obj["name"].(string)
-	res, _, err := session.Get("http://requestbin.net/r/"+bin, Params{Data: Any{"hello": "world"}}, nil)
+	res, _, err := session.Get("https://requestbin.net/r/"+bin, Params{Data: Any{"hello": "world"}}, nil)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	if res.StatusCode != http.StatusOK {
 		t.FailNow()
 	}
-	log.Printf("open %s for more details", "http://requestbin.net/r/"+bin+"?inspect")
+	log.Printf("open %s for more details", "https://requestbin.net/r/"+bin+"?inspect")
 
-	_, _, err = session.Post("http://requestbin.net/r/"+bin, Params{
+	_, _, err = session.Post("https://requestbin.net/r/"+bin, Params{
 		Query: Any{"format": "json"},
 		Json:  map[string]interface{}{"hello": "foobar", "version": 1}}, nil)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	_, _, err = session.Post("http://requestbin.net/r/"+bin, Params{
+	_, _, err = session.Post("https://requestbin.net/r/"+bin, Params{
 		Query: Any{"format": "multipart"},
 		Data:  Any{"version": "3"},
 		Files: Any{"file": "README.md"}}, nil)
@@ -80,7 +80,7 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	_, _, err = session.Post("http://requestbin.net/r/"+bin, Params{Body: []byte(`i am body`)}, nil)
+	_, _, err = session.Post("https://requestbin.net/r/"+bin, Params{Body: []byte(`i am body`)}, nil)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -92,7 +92,7 @@ func TestRequestWithContext(t *testing.T) {
 		Timeout: 30 * time.Second,
 	})
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	_, _, err := session.PostWithContext(ctx, "http://requestbin.net/ip", Params{Data: Any{"fizz": "buzz"}}, nil)
+	_, _, err := session.PostWithContext(ctx, "https://requestbin.net/ip", Params{Data: Any{"fizz": "buzz"}}, nil)
 	if err == nil {
 		t.Fatal("deadline did not exceeded")
 	}
