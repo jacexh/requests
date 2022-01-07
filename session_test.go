@@ -9,7 +9,7 @@ import (
 )
 
 func TestInterceptor(t *testing.T) {
-	session := NewSession(Option{})
+	session := NewSession()
 	ret := make(map[string]interface{})
 	_, _, err := session.Request(
 		"get", "https://httpbin.org/json",
@@ -30,10 +30,10 @@ func TestInterceptor(t *testing.T) {
 }
 
 func TestCreateBinOnRequestBin(t *testing.T) {
-	session := NewSession(Option{
-		Name:    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36",
-		Timeout: 90 * time.Second,
-	})
+	session := NewSession(
+		WithUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36"),
+		WithGlobalTimeout(90*time.Second),
+	)
 	_, _, err := session.Get("https://requestbin.net", Params{}, nil)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -87,10 +87,10 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 }
 
 func TestRequestWithContext(t *testing.T) {
-	session := NewSession(Option{
-		Name:    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36",
-		Timeout: 30 * time.Second,
-	})
+	session := NewSession(
+		WithUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36"),
+		WithGlobalTimeout(30*time.Second),
+	)
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	_, _, err := session.PostWithContext(ctx, "https://requestbin.net/ip", Params{Data: Any{"fizz": "buzz"}}, nil)
 	if err == nil {

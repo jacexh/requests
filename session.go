@@ -24,14 +24,6 @@ type (
 	// Any 可用于query/headers/data/files传参
 	Any map[string]string
 
-	// Option Session的全局配置
-	Option struct {
-		Name               string
-		Timeout            time.Duration
-		InsecureSkipVerify bool
-		Headers            Any
-	}
-
 	Params struct {
 		Query   Any
 		Data    Any
@@ -42,16 +34,23 @@ type (
 	}
 
 	Session struct {
-		client *http.Client
-		op     Option
+		client        *http.Client
+		userAgent     string
+		globalHeaders Any
 	}
 
 	Interceptor func(*http.Request, *http.Response, []byte) error
 )
 
-func NewSession(op Option) *Session {
+func UnmarshalJSONResponse(v interface{}) Interceptor {
+	return func(request *http.Request, response *http.Response, bytes []byte) error {
+		return json.Unmarshal(bytes, v)
+	}
+}
+
+func NewSession(opts ...Option) *Session {
 	jar, _ := cookiejar.New(nil)
-	return &Session{
+	s := &Session{
 		client: &http.Client{
 			Transport: &http.Transport{
 				Proxy: nil,
@@ -60,44 +59,30 @@ func NewSession(op Option) *Session {
 					KeepAlive: 30 * time.Second,
 					DualStack: true,
 				}).DialContext,
-				ForceAttemptHTTP2:   true,
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 50,
-				MaxConnsPerHost:     1000,
-				IdleConnTimeout:     60 * time.Second,
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: op.InsecureSkipVerify,
-				},
+				ForceAttemptHTTP2:     true,
+				MaxIdleConns:          10,
+				MaxIdleConnsPerHost:   10,
+				MaxConnsPerHost:       1000,
+				IdleConnTimeout:       60 * time.Second,
+				TLSClientConfig:       &tls.Config{InsecureSkipVerify: false},
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
 			},
 			Jar:     jar,
-			Timeout: op.Timeout,
+			Timeout: 30 * time.Second,
 		},
-		op: op,
+		userAgent:     defaultUA,
+		globalHeaders: make(Any),
 	}
-}
 
-func UnmarshalJSONResponse(v interface{}) Interceptor {
-	return func(request *http.Request, response *http.Response, bytes []byte) error {
-		return json.Unmarshal(bytes, v)
-	}
-}
-
-func (s *Session) WithClient(client *http.Client) *Session {
-	s.client = client
-	s.client.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = s.op.InsecureSkipVerify
-	s.client.Timeout = s.op.Timeout
+	s.Apply(opts...)
 	return s
 }
 
-func (s *Session) WithOption(op Option) *Session {
-	s.op = op
-	if s.client != nil {
-		s.client.Timeout = s.op.Timeout
-		s.client.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = s.op.InsecureSkipVerify
+func (s *Session) Apply(opts ...Option) {
+	for _, opt := range opts {
+		opt(s)
 	}
-	return s
 }
 
 func (s *Session) writeBody(params Params, w io.Writer) (string, error) {
@@ -163,10 +148,10 @@ body:
 
 func (s *Session) Prepare(ctx context.Context, method, path string, params Params, body io.ReadWriter, withContext bool) (*http.Request, error) {
 	var err error
-	var contentType string
+	var autoContentType string
 	var req *http.Request
 
-	contentType, err = s.writeBody(params, body)
+	autoContentType, err = s.writeBody(params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -181,19 +166,13 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 	}
 
 	// begin to set headers
-	if s.op.Headers != nil {
-		for k, v := range s.op.Headers {
-			req.Header.Set(k, v)
-		}
+	for k, v := range s.globalHeaders {
+		req.Header.Set(k, v)
 	}
-	if s.op.Name == "" {
-		req.Header.Set("User-Agent", defaultUA)
-	} else {
-		req.Header.Set("User-Agent", s.op.Name)
-	}
+	req.Header.Set("User-Agent", s.userAgent)
 
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", autoContentType)
 	}
 	if params.Headers != nil {
 		for k, v := range params.Headers {
