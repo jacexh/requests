@@ -33,6 +33,8 @@ func TestCreateBinOnRequestBin(t *testing.T) {
 	session := NewSession(
 		WithUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36"),
 		WithGlobalTimeout(90*time.Second),
+		WithStdRequestPrinter(),
+		WithStdResponsePrinter(),
 	)
 	_, _, err := session.Get("https://requestbin.net", Params{}, nil)
 	if err != nil {

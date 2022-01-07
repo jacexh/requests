@@ -44,3 +44,27 @@ func WithGlobalHeader(header Any) Option {
 		}
 	}
 }
+
+func WithRequestPrinter(p RequestPrinter) Option {
+	return func(s *Session) {
+		s.requestPrinter = p
+	}
+}
+
+func WithStdRequestPrinter() Option {
+	return func(s *Session) {
+		s.requestPrinter = defaultRequestPrinter
+	}
+}
+
+func WithResponsePrinter(p ResponsePrinter) Option {
+	return func(s *Session) {
+		s.responsePrinter = p
+	}
+}
+
+func WithStdResponsePrinter() Option {
+	return func(s *Session) {
+		s.responsePrinter = defaultResponsePrinter
+	}
+}

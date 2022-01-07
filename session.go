@@ -34,9 +34,11 @@ type (
 	}
 
 	Session struct {
-		client        *http.Client
-		userAgent     string
-		globalHeaders Any
+		client          *http.Client
+		userAgent       string
+		globalHeaders   Any
+		requestPrinter  RequestPrinter
+		responsePrinter ResponsePrinter
 	}
 
 	Interceptor func(*http.Request, *http.Response, []byte) error
@@ -187,6 +189,10 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 		}
 		req.URL.RawQuery = query.Encode()
 	}
+
+	if s.requestPrinter != nil {
+		s.requestPrinter.LogRequest(req.Method, req.URL.String(), req.Header)
+	}
 	return req, err
 }
 
@@ -208,6 +214,10 @@ func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Respon
 	}
 	_ = res.Body.Close()
 	data = buf.Bytes()
+
+	if s.responsePrinter != nil {
+		s.responsePrinter.LogResponse(res.StatusCode, res.Header, data)
+	}
 
 	if interceptor != nil {
 		err = interceptor(req, res, data)
