@@ -35,7 +35,7 @@ func NewZapLogger(logger *zap.Logger) *ZapLogger {
 			},
 
 			func(r *http.Request, b []byte) zap.Field {
-				return zap.String("content-type", r.Header.Get("Content-Type"))
+				return zap.String("content_type", r.Header.Get("Content-Type"))
 			},
 		},
 		responseFieldSelectors: []ResponseFieldSelector{
@@ -44,7 +44,7 @@ func NewZapLogger(logger *zap.Logger) *ZapLogger {
 			},
 
 			func(r *http.Response, b []byte) zap.Field {
-				return zap.Int64("content-length", r.ContentLength)
+				return zap.Int64("content_length", r.ContentLength)
 			},
 		},
 	}
