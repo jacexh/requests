@@ -19,7 +19,8 @@ type (
 )
 
 var (
-	_ requests.RequestPrinter = (*ZapLogger)(nil)
+	_ requests.RequestPrinter  = (*ZapLogger)(nil)
+	_ requests.ResponsePrinter = (*ZapLogger)(nil)
 )
 
 func NewZapLogger(logger *zap.Logger) *ZapLogger {
