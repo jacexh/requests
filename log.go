@@ -9,11 +9,11 @@ import (
 
 type (
 	RequestPrinter interface {
-		LogRequest(method string, url string, headers http.Header)
+		LogRequest(*http.Request, []byte)
 	}
 
 	ResponsePrinter interface {
-		LogResponse(statusCode int, headers http.Header, data []byte)
+		LogResponse(*http.Response, []byte)
 	}
 
 	stdPrinter struct {
@@ -35,12 +35,22 @@ func newStdPrinter() *stdPrinter {
 	}
 }
 
-func (p *stdPrinter) LogRequest(method string, url string, headers http.Header) {
-	p.logger.Output(2, fmt.Sprintf("method=%s, request_url=%s, header=%v", method, url, headers))
+func (p *stdPrinter) LogRequest(req *http.Request, body []byte) {
+	if len(body) > 1024 {
+		p.logger.Output(2, fmt.Sprintf("[method]=%s, [request_url]=%s, [query]=%s, [header]=%v",
+			req.Method, req.URL.String(), req.URL.RawQuery, req.Header))
+		return
+	}
+	p.logger.Output(2, fmt.Sprintf("[method]=%s, [request_url]=%s, [query]=%s, [header]=%v, [body]=%s",
+		req.Method, req.URL.String(), req.URL.RawQuery, req.Header, body))
 }
 
-func (p *stdPrinter) LogResponse(statusCode int, headers http.Header, data []byte) {
-	p.logger.Output(2, fmt.Sprintf("status_code=%d, header=%v, body=%s", statusCode, headers, string(data)))
+func (p *stdPrinter) LogResponse(res *http.Response, body []byte) {
+	if len(body) > 1024 {
+		p.logger.Output(2, fmt.Sprintf("[status_code]=%d, [header]=%v", res.StatusCode, res.Header))
+		return
+	}
+	p.logger.Output(2, fmt.Sprintf("[status_code]=%d, [header]=%v, [body]=%s", res.StatusCode, res.Header, body))
 }
 
 func init() {

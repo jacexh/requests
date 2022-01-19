@@ -122,6 +122,8 @@ body:
 			if err != nil {
 				break body
 			}
+			defer file.Close()
+
 			part, err := writer.CreateFormFile(field, filepath.Base(file.Name()))
 			if err != nil {
 				break body
@@ -152,6 +154,11 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 	var err error
 	var autoContentType string
 	var req *http.Request
+
+	if s.requestPrinter != nil {
+		body = newRequestBodyRecorder(body)
+		defer body.(*requestBodyRecorder).Close()
+	}
 
 	autoContentType, err = s.writeBody(params, body)
 	if err != nil {
@@ -191,7 +198,9 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 	}
 
 	if s.requestPrinter != nil {
-		s.requestPrinter.LogRequest(req.Method, req.URL.String(), req.Header)
+		if recorder, ok := body.(*requestBodyRecorder); ok {
+			s.requestPrinter.LogRequest(req, recorder.Dump())
+		}
 	}
 	return req, err
 }
@@ -216,7 +225,7 @@ func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Respon
 	data = buf.Bytes()
 
 	if s.responsePrinter != nil {
-		s.responsePrinter.LogResponse(res.StatusCode, res.Header, data)
+		s.responsePrinter.LogResponse(res, data)
 	}
 
 	if interceptor != nil {

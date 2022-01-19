@@ -93,7 +93,8 @@ func TestRequestWithContext(t *testing.T) {
 		WithUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36"),
 		WithGlobalTimeout(30*time.Second),
 	)
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
 	_, _, err := session.PostWithContext(ctx, "https://requestbin.net/ip", Params{Data: Any{"fizz": "buzz"}}, nil)
 	if err == nil {
 		t.Fatal("deadline did not exceeded")
