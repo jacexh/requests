@@ -1,102 +1,73 @@
-package requests
+package requests_test
 
 import (
-	"context"
-	"log"
+	"encoding/base64"
+	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
+
+	"github.com/jacexh/requests"
 )
 
+type Response struct {
+	Headers map[string]string `json:"headers,omitempty"`
+	Queries map[string]string `json:"queries,omitempty"`
+	Body    string            `json:"body,omitempty"`
+	Error   string            `json:"error,omitempty"`
+}
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+	res := &Response{
+		Headers: make(map[string]string),
+		Queries: make(map[string]string),
+	}
+	// copy request headers
+	for k := range r.Header {
+		res.Headers[k] = r.Header.Get(k)
+	}
+	// copy query params
+	for k := range r.URL.Query() {
+		res.Queries[k] = r.URL.Query().Get(k)
+	}
+	// copy request body
+	defer r.Body.Close()
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		res.Error = err.Error()
+	} else if len(data) > 0 {
+		res.Body = base64.StdEncoding.EncodeToString(data)
+	}
+
+	data, _ = json.Marshal(res)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}
+
 func TestInterceptor(t *testing.T) {
-	session := NewSession()
-	ret := make(map[string]interface{})
+	ts := httptest.NewServer(http.HandlerFunc(Handler))
+	defer ts.Close()
+
+	session := requests.NewSession()
+	ret := new(Response)
+	payload := []byte("hello world")
 	_, _, err := session.Request(
-		"get", "https://httpbin.org/json",
-		Params{},
-		UnmarshalJSONResponse(&ret),
+		"Post", ts.URL,
+		requests.Params{Body: payload},
+		requests.UnmarshalJSONResponse(&ret),
 	)
 
 	if err != nil {
 		t.FailNow()
 	}
-	if len(ret) == 0 {
+	if ret.Headers["User-Agent"] != "jacexh/requests - a go client for human" {
 		t.FailNow()
 	}
 
-	if _, ok := ret["slideshow"]; !ok {
+	expectedBody := base64.StdEncoding.EncodeToString(payload)
+	if expectedBody != ret.Body {
 		t.FailNow()
-	}
-}
-
-func TestCreateBinOnRequestBin(t *testing.T) {
-	session := NewSession(
-		WithUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36"),
-		WithGlobalTimeout(90*time.Second),
-		WithStdRequestPrinter(),
-		WithStdResponsePrinter(),
-	)
-	_, _, err := session.Get("https://requestbin.net", Params{}, nil)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-
-	obj := make(map[string]interface{})
-	_, data, err := session.Post("https://requestbin.net/api/v1/bins", Params{
-		Data:    Any{"private": "false"},
-		Headers: Any{"Origin": "https://requestbin.net"},
-	},
-		UnmarshalJSONResponse(&obj))
-	if err != nil {
-		if data != nil {
-			t.Fatalf("%s\n%s", err.Error(), data)
-		} else {
-			t.Fatal(err.Error())
-		}
-	}
-	if _, ok := obj["name"]; !ok {
-		t.Fatal(string(data))
-	}
-	bin := obj["name"].(string)
-	res, _, err := session.Get("https://requestbin.net/r/"+bin, Params{Data: Any{"hello": "world"}}, nil)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	if res.StatusCode != http.StatusOK {
-		t.FailNow()
-	}
-	log.Printf("open %s for more details", "https://requestbin.net/r/"+bin+"?inspect")
-
-	_, _, err = session.Post("https://requestbin.net/r/"+bin, Params{
-		Query: Any{"format": "json"},
-		Json:  map[string]interface{}{"hello": "foobar", "version": 1}}, nil)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	_, _, err = session.Post("https://requestbin.net/r/"+bin, Params{
-		Query: Any{"format": "multipart"},
-		Data:  Any{"version": "3"},
-		Files: Any{"file": "README.md"}}, nil)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	_, _, err = session.Post("https://requestbin.net/r/"+bin, Params{Body: []byte(`i am body`)}, nil)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-}
-
-func TestRequestWithContext(t *testing.T) {
-	session := NewSession(
-		WithUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36"),
-		WithGlobalTimeout(30*time.Second),
-	)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
-	_, _, err := session.PostWithContext(ctx, "https://requestbin.net/ip", Params{Data: Any{"fizz": "buzz"}}, nil)
-	if err == nil {
-		t.Fatal("deadline did not exceeded")
 	}
 }

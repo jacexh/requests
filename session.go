@@ -152,7 +152,7 @@ body:
 	return contentType, err
 }
 
-func (s *Session) Prepare(ctx context.Context, method, path string, params Params, body io.ReadWriter, withContext bool) (*http.Request, error) {
+func (s *Session) Prepare(ctx context.Context, method, path string, params Params, body io.ReadWriter) (*http.Request, error) {
 	var err error
 	var autoContentType string
 	var req *http.Request
@@ -169,11 +169,7 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 		return nil, err
 	}
 
-	if withContext {
-		req, err = http.NewRequestWithContext(ctx, strings.ToUpper(method), path, body)
-	} else {
-		req, err = http.NewRequest(strings.ToUpper(method), path, body)
-	}
+	req, err = http.NewRequestWithContext(ctx, strings.ToUpper(method), path, body)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +236,7 @@ func (s *Session) Request(method, path string, params Params, interceptor Interc
 	buff := GetBuffer()
 	defer PutBuffer(buff)
 
-	req, err := s.Prepare(context.TODO(), method, path, params, buff, false)
+	req, err := s.Prepare(context.Background(), method, path, params, buff)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -252,7 +248,7 @@ func (s *Session) RequestWithContext(ctx context.Context, method, path string, p
 	buff := GetBuffer()
 	defer PutBuffer(buff)
 
-	req, err := s.Prepare(ctx, method, path, params, buff, true)
+	req, err := s.Prepare(ctx, method, path, params, buff)
 	if err != nil {
 		return nil, nil, err
 	}

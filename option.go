@@ -68,3 +68,12 @@ func WithStdResponsePrinter() Option {
 		s.responsePrinter = defaultResponsePrinter
 	}
 }
+
+func WithTransport(t http.RoundTripper) Option {
+	return func(s *Session) {
+		if t == nil {
+			return
+		}
+		s.client.Transport = t
+	}
+}
