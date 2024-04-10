@@ -56,7 +56,7 @@ func TestInterceptor(t *testing.T) {
 	_, _, err := session.Request(
 		"Post", ts.URL,
 		requests.Params{Body: payload},
-		requests.UnmarshalJSONResponse(&ret),
+		requests.UnmarshalJSON(&ret),
 	)
 
 	if err != nil {

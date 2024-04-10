@@ -35,21 +35,22 @@ type (
 	}
 
 	Session struct {
-		client          *http.Client
-		userAgent       string
-		globalHeaders   Any
-		requestPrinter  RequestPrinter
-		responsePrinter ResponsePrinter
+		client        *http.Client
+		userAgent     string
+		globalHeaders Any
+		beforeHooks   []BeforeRequestHook
+		afterHooks    []AfterRequestHook
 	}
 
-	Interceptor func(*http.Request, *http.Response, []byte) error
+	// BeforeRequestHook 会在调用`Client.Do(*http.Request)`前调用，此时已经完成了parama的自动装填
+	BeforeRequestHook func(*http.Request, []byte)
+
+	// AfterRequestHook 会在完成`Client.Do(*http.Request)`后立即调用
+	AfterRequestHook func(*http.Response, error)
+
+	// ResponseRender 用于对response的反序列化
+	Unmarshaller func([]byte) error
 )
-
-func UnmarshalJSONResponse(v interface{}) Interceptor {
-	return func(request *http.Request, response *http.Response, bytes []byte) error {
-		return json.Unmarshal(bytes, v)
-	}
-}
 
 func NewSession(opts ...Option) *Session {
 	jar, _ := cookiejar.New(nil)
@@ -76,6 +77,8 @@ func NewSession(opts ...Option) *Session {
 		},
 		userAgent:     defaultUA,
 		globalHeaders: make(Any),
+		beforeHooks:   make([]BeforeRequestHook, 0),
+		afterHooks:    make([]AfterRequestHook, 0),
 	}
 
 	s.Apply(opts...)
@@ -151,6 +154,17 @@ body:
 	return contentType, err
 }
 
+func (s *Session) Request(method, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	buff := GetBuffer()
+	defer PutBuffer(buff)
+
+	req, err := s.Prepare(context.Background(), method, path, params, buff)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.Send(req, unmarshaller)
+}
+
 func (s *Session) Prepare(ctx context.Context, method, path string, params Params, buff *bytes.Buffer) (*http.Request, error) {
 	var err error
 	var autoContentType string
@@ -188,13 +202,13 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 		req.URL.RawQuery = query.Encode()
 	}
 
-	if s.requestPrinter != nil {
-		s.requestPrinter.LogRequest(req, buff.Bytes())
+	for _, hook := range s.beforeHooks {
+		hook(req, buff.Bytes())
 	}
 	return req, err
 }
 
-func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) Send(req *http.Request, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
 	buf := GetBuffer()
 	defer PutBuffer(buf)
 
@@ -202,6 +216,9 @@ func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Respon
 	var data []byte
 
 	res, err := s.client.Do(req)
+	for _, hook := range s.afterHooks {
+		hook(res, err)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -213,29 +230,13 @@ func (s *Session) Send(req *http.Request, interceptor Interceptor) (*http.Respon
 	_ = res.Body.Close()
 	data = buf.Bytes()
 
-	if s.responsePrinter != nil {
-		s.responsePrinter.LogResponse(res, data)
-	}
-
-	if interceptor != nil {
-		err = interceptor(req, res, data)
+	if unmarshaller != nil {
+		err = unmarshaller(data)
 	}
 	return res, data, err
 }
 
-func (s *Session) Request(method, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	buff := GetBuffer()
-	defer PutBuffer(buff)
-
-	req, err := s.Prepare(context.Background(), method, path, params, buff)
-	if err != nil {
-		return nil, nil, err
-	}
-	res, data, err := s.Send(req, interceptor)
-	return res, data, err
-}
-
-func (s *Session) RequestWithContext(ctx context.Context, method, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
+func (s *Session) RequestWithContext(ctx context.Context, method, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
 	buff := GetBuffer()
 	defer PutBuffer(buff)
 
@@ -243,78 +244,78 @@ func (s *Session) RequestWithContext(ctx context.Context, method, path string, p
 	if err != nil {
 		return nil, nil, err
 	}
-	res, data, err := s.Send(req, interceptor)
+	res, data, err := s.Send(req, unmarshaller)
 	return res, data, err
 }
 
-func (s *Session) Get(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodGet, path, params, interceptor)
+func (s *Session) Get(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodGet, path, params, unmarshaller)
 }
 
-func (s *Session) GetWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodGet, path, params, interceptor)
+func (s *Session) GetWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodGet, path, params, unmarshaller)
 }
 
-func (s *Session) Post(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodPost, path, params, interceptor)
+func (s *Session) Post(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodPost, path, params, unmarshaller)
 }
 
-func (s *Session) PostWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodPost, path, params, interceptor)
+func (s *Session) PostWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodPost, path, params, unmarshaller)
 }
 
-func (s *Session) Put(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodPut, path, params, interceptor)
+func (s *Session) Put(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodPut, path, params, unmarshaller)
 }
 
-func (s *Session) PutWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodPut, path, params, interceptor)
+func (s *Session) PutWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodPut, path, params, unmarshaller)
 }
 
-func (s *Session) Patch(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodPatch, path, params, interceptor)
+func (s *Session) Patch(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodPatch, path, params, unmarshaller)
 }
 
-func (s *Session) PatchWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodPatch, path, params, interceptor)
+func (s *Session) PatchWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodPatch, path, params, unmarshaller)
 }
 
-func (s *Session) Delete(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodDelete, path, params, interceptor)
+func (s *Session) Delete(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodDelete, path, params, unmarshaller)
 }
 
-func (s *Session) DeleteWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodDelete, path, params, interceptor)
+func (s *Session) DeleteWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodDelete, path, params, unmarshaller)
 }
 
-func (s *Session) Head(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodHead, path, params, interceptor)
+func (s *Session) Head(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodHead, path, params, unmarshaller)
 }
 
-func (s *Session) HeadWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodHead, path, params, interceptor)
+func (s *Session) HeadWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodHead, path, params, unmarshaller)
 }
 
-func (s *Session) Connect(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodConnect, path, params, interceptor)
+func (s *Session) Connect(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodConnect, path, params, unmarshaller)
 }
 
-func (s *Session) ConnectWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodConnect, path, params, interceptor)
+func (s *Session) ConnectWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodConnect, path, params, unmarshaller)
 }
 
-func (s *Session) Options(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodOptions, path, params, interceptor)
+func (s *Session) Options(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodOptions, path, params, unmarshaller)
 }
 
-func (s *Session) OptionWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodOptions, path, params, interceptor)
+func (s *Session) OptionWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodOptions, path, params, unmarshaller)
 }
 
-func (s *Session) Trace(path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.Request(http.MethodTrace, path, params, interceptor)
+func (s *Session) Trace(path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.Request(http.MethodTrace, path, params, unmarshaller)
 }
 
-func (s *Session) TraceWithContext(ctx context.Context, path string, params Params, interceptor Interceptor) (*http.Response, []byte, error) {
-	return s.RequestWithContext(ctx, http.MethodTrace, path, params, interceptor)
+func (s *Session) TraceWithContext(ctx context.Context, path string, params Params, unmarshaller Unmarshaller) (*http.Response, []byte, error) {
+	return s.RequestWithContext(ctx, http.MethodTrace, path, params, unmarshaller)
 }
