@@ -88,11 +88,10 @@ func (s *Session) Apply(opts ...Option) {
 	}
 }
 
-func (s *Session) writeBody(params Params, writers ...io.Writer) (string, error) {
+func (s *Session) renderBody(params Params, w io.Writer) (string, error) {
 	var err error
 	var contentType string
 
-	w := io.MultiWriter(writers...)
 body:
 	switch {
 	case params.Body != nil:
@@ -152,24 +151,17 @@ body:
 	return contentType, err
 }
 
-func (s *Session) Prepare(ctx context.Context, method, path string, params Params, body io.ReadWriter) (*http.Request, error) {
+func (s *Session) Prepare(ctx context.Context, method, path string, params Params, buff *bytes.Buffer) (*http.Request, error) {
 	var err error
 	var autoContentType string
 	var req *http.Request
-	var requestWriter *bytes.Buffer
 
-	if s.requestPrinter != nil {
-		requestWriter = GetBuffer()
-		defer PutBuffer(requestWriter)
-		autoContentType, err = s.writeBody(params, body, requestWriter)
-	} else {
-		autoContentType, err = s.writeBody(params, body)
-	}
+	autoContentType, err = s.renderBody(params, buff)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err = http.NewRequestWithContext(ctx, strings.ToUpper(method), path, body)
+	req, err = http.NewRequestWithContext(ctx, strings.ToUpper(method), path, buff)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +171,6 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 		req.Header.Set(k, v)
 	}
 	req.Header.Set("User-Agent", s.userAgent)
-
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", autoContentType)
 	}
@@ -198,7 +189,7 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 	}
 
 	if s.requestPrinter != nil {
-		s.requestPrinter.LogRequest(req, requestWriter.Bytes())
+		s.requestPrinter.LogRequest(req, buff.Bytes())
 	}
 	return req, err
 }
