@@ -36,7 +36,7 @@ func StdLogRequest(logger *log.Logger) BeforeRequestHook {
 func StdLogResponse(logger *log.Logger) AfterRequestHook {
 	return func(res *http.Response, err error) {
 		if err != nil {
-			logger.Output(2, fmt.Sprintf("[status_code]=%d, [header]=%v, [error]=%v", res.StatusCode, res.Header, err))
+			logger.Output(2, fmt.Sprintf("[error]=%v", err))
 			return
 		}
 		logger.Output(2, fmt.Sprintf("[status_code]=%d, [header]=%v", res.StatusCode, res.Header))
@@ -64,8 +64,7 @@ func LogResponse(logger *slog.Logger) AfterRequestHook {
 		}
 
 		if err != nil {
-			logger.ErrorContext(res.Request.Context(), "get response", slog.String("error", err.Error()),
-				slog.Int("status_code", res.StatusCode))
+			logger.Error("failed to fetch response", slog.String("error", err.Error()))
 			return
 		}
 		logger.InfoContext(res.Request.Context(), "get response", slog.Int("status_code", res.StatusCode))
