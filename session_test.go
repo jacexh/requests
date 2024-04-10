@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -51,6 +52,10 @@ func TestInterceptor(t *testing.T) {
 	defer ts.Close()
 
 	session := requests.NewSession()
+	session.Apply(
+		requests.WithBeforeHooks(requests.LogRequest(slog.Default())),
+		requests.WithAfterHooks(requests.LogResponse(slog.Default())),
+	)
 	ret := new(Response)
 	payload := []byte("hello world")
 	_, _, err := session.Request(
@@ -65,6 +70,8 @@ func TestInterceptor(t *testing.T) {
 	if ret.Headers["User-Agent"] != "jacexh/requests - a go client for human" {
 		t.FailNow()
 	}
+
+	slog.Info("print response", slog.Any("response", ret))
 
 	expectedBody := base64.StdEncoding.EncodeToString(payload)
 	if expectedBody != ret.Body {
