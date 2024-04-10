@@ -24,12 +24,12 @@ func UnmarlXML(v any) Unmarshaller {
 func StdLogRequest(logger *log.Logger) BeforeRequestHook {
 	return func(req *http.Request, body []byte) {
 		if len(body) > 1024 {
-			logger.Output(2, fmt.Sprintf("[method]=%s, [request_url]=%s, [query]=%s, [header]=%v",
-				req.Method, req.URL.String(), req.URL.RawQuery, req.Header))
+			logger.Output(2, fmt.Sprintf("[method]=%s, [request_url]=%s, [header]=%v",
+				req.Method, req.URL.String(), req.Header))
 			return
 		}
-		logger.Output(2, fmt.Sprintf("[method]=%s, [request_url]=%s, [query]=%s, [header]=%v, [body]=%s",
-			req.Method, req.URL.String(), req.URL.RawQuery, req.Header, body))
+		logger.Output(2, fmt.Sprintf("[method]=%s, [request_url]=%s, [header]=%v, [body]=%s",
+			req.Method, req.URL.String(), req.Header, body))
 	}
 }
 
@@ -50,10 +50,10 @@ func LogRequest(logger *slog.Logger) BeforeRequestHook {
 		}
 		if len(b) <= 1024 {
 			logger.InfoContext(r.Context(), "send request", slog.String("method", r.Method), slog.String("request_url", r.URL.String()),
-				slog.String("query", r.URL.RawQuery), slog.String("body", string(b)))
+				slog.String("body", string(b)))
 			return
 		}
-		logger.InfoContext(r.Context(), "send request", slog.String("method", r.Method), slog.String("request_url", r.URL.String()), slog.String("query", r.URL.RawQuery))
+		logger.InfoContext(r.Context(), "send request", slog.String("method", r.Method), slog.String("request_url", r.URL.String()))
 	}
 }
 
@@ -65,9 +65,9 @@ func LogResponse(logger *slog.Logger) AfterRequestHook {
 
 		if err != nil {
 			logger.ErrorContext(res.Request.Context(), "get response", slog.String("error", err.Error()),
-				slog.Int64("length", res.ContentLength), slog.Int("status_code", res.StatusCode))
+				slog.Int("status_code", res.StatusCode))
 			return
 		}
-		logger.InfoContext(res.Request.Context(), "get response", slog.Int("status_code", res.StatusCode), slog.Int64("length", res.ContentLength))
+		logger.InfoContext(res.Request.Context(), "get response", slog.Int("status_code", res.StatusCode))
 	}
 }
