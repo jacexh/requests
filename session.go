@@ -57,7 +57,6 @@ func NewSession(opts ...Option) *Session {
 	s := &Session{
 		client: &http.Client{
 			Transport: &http.Transport{
-				Proxy: nil,
 				DialContext: (&net.Dialer{
 					Timeout:   30 * time.Second,
 					KeepAlive: 30 * time.Second,
