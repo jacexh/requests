@@ -79,7 +79,7 @@ func TestInterceptor(t *testing.T) {
 		t.FailNow()
 	}
 
-	if reflect.DeepEqual(ret.Queries, map[string]string{"age": "18", "foo": "bar!", "value": "90", "bool": "true"}) {
+	if !reflect.DeepEqual(ret.Queries, map[string]string{"age": "18", "foo": "bar!", "value": "90", "bool": "true"}) {
 		t.FailNow()
 	}
 }
