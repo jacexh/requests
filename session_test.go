@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/jacexh/requests"
@@ -60,7 +61,7 @@ func TestInterceptor(t *testing.T) {
 	payload := []byte("hello world")
 	_, _, err := session.Request(
 		"Post", ts.URL,
-		requests.Params{Body: payload},
+		requests.Params{Body: payload, Query: requests.Any{"age": 18, "foo": "bar!", "value": uint32(90), "bool": true}},
 		requests.UnmarshalJSON(&ret),
 	)
 
@@ -75,6 +76,10 @@ func TestInterceptor(t *testing.T) {
 
 	expectedBody := base64.StdEncoding.EncodeToString(payload)
 	if expectedBody != ret.Body {
+		t.FailNow()
+	}
+
+	if reflect.DeepEqual(ret.Queries, map[string]string{"age": "18", "foo": "bar!", "value": "90", "bool": "true"}) {
 		t.FailNow()
 	}
 }

@@ -23,7 +23,7 @@ const (
 
 type (
 	// Any 可用于query/headers/data/files传参
-	Any map[string]string
+	Any map[string]any
 
 	Params struct {
 		Query   Any
@@ -116,13 +116,21 @@ body:
 	case params.Files != nil:
 		writer := multipart.NewWriter(w)
 		for k, v := range params.Data {
-			if err := writer.WriteField(k, v); err != nil {
+			str, err := ToString(v)
+			if err != nil {
+				return "", err
+			}
+			if err := writer.WriteField(k, str); err != nil {
 				break body
 			}
 		}
 
 		for field, fp := range params.Files {
-			file, err := os.Open(fp)
+			str, err := ToString(fp)
+			if err != nil {
+				return "", err
+			}
+			file, err := os.Open(str)
 			if err != nil {
 				break body
 			}
@@ -145,7 +153,11 @@ body:
 	case params.Data != nil:
 		values := url.Values{}
 		for k, v := range params.Data {
-			values.Set(k, v)
+			sv, err := ToString(v)
+			if err != nil {
+				return "", err
+			}
+			values.Set(k, sv)
 		}
 		_, err = w.Write([]byte(values.Encode()))
 		contentType = "application/x-www-form-urlencoded"
@@ -182,7 +194,11 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 
 	// begin to set headers
 	for k, v := range s.globalHeaders {
-		req.Header.Set(k, v)
+		sv, err := ToString(v)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set(k, sv)
 	}
 	req.Header.Set("User-Agent", s.userAgent)
 	if req.Header.Get("Content-Type") == "" {
@@ -190,14 +206,22 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 	}
 	if params.Headers != nil {
 		for k, v := range params.Headers {
-			req.Header.Set(k, v)
+			sv, err := ToString(v)
+			if err != nil {
+				return nil, err
+			}
+			req.Header.Set(k, sv)
 		}
 	}
 
 	if params.Query != nil {
 		query := req.URL.Query()
 		for k, v := range params.Query {
-			query.Set(k, v)
+			sv, err := ToString(v)
+			if err != nil {
+				return nil, err
+			}
+			query.Set(k, sv)
 		}
 		req.URL.RawQuery = query.Encode()
 	}
