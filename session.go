@@ -200,7 +200,7 @@ func (s *Session) Prepare(ctx context.Context, method, path string, params Param
 		req.Header.Set(k, sv)
 	}
 	req.Header.Set("User-Agent", s.userAgent)
-	if req.Header.Get("Content-Type") == "" {
+	if req.Header.Get("Content-Type") == "" && autoContentType != "" {
 		req.Header.Set("Content-Type", autoContentType)
 	}
 	if params.Headers != nil {
